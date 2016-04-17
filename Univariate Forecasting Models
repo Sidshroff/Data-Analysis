@@ -1,0 +1,65 @@
+setwd("C:/Users/Siddhi/Desktop/Personal/ASU/Applied Project/Forecasting Models")
+
+# read the file
+cmrc <- read.csv("Complete_cmrc_2011_2015.csv")
+
+# aggregate patient volume over year and month
+cmrc["Count"] <- 1
+cmrc_aggregated <- aggregate(cmrc[c("Count")], by = list(year = cmrc$Year,month=cmrc$Month_Admit), FUN="sum", na.rm=TRUE)
+write.csv(cmrc_aggregated,"cmrc_aggregated.csv")
+
+# Reading the data in R in time series format 
+cmrc_data_timeseries <- read.csv("Data_For_R_cmrc.csv", header = FALSE)
+cmrc_timeseries <- ts(cmrc_data_timeseries,frequency =12, start = c(2011,1))
+
+
+# plot time series graph
+plot.ts(cmrc_timeseries)
+
+# Decomposing seasonal data into seasonal, trend and irregular component
+cmrc_timeseries_components<- decompose(cmrc_timeseries)
+plot(cmrc_timeseries_components)
+
+#Checking whether data is stationary and apt for modelling
+acf(cmrc_timeseries, lag.max = 60)
+library("tseries")
+kpss.test(cmrc_timeseries_diff)
+
+
+# Taking the first differences to make the data stationary
+cmrc_timeseries_diff <- diff(cmrc_timeseries, differences = 1)
+plot.ts(cmrc_timeseries_diff)
+acf(cmrc_timeseries_diff,lag.max =40)
+kpss.test(cmrc_timeseries_diff)
+
+# Dividing the data into 3 sets
+train_cmrc <- window(cmrc_timeseries_diff, start = (2011), end = c(2014,12))
+test_cmrc <- window(cmrc_timeseries_diff, start = (2015), end = c(2015,12))
+
+# Making a simple exponential model
+ets_model <- ets(train_cmrc)
+forecast_train_cmrc <- forecast(ets_model, h=12)
+accuracy_ets <- accuracy(forecast_train_cmrc, test_cmrc)
+
+# Make arima model
+arima_model <- auto.arima(train_cmrc)
+acf(residuals(arima_model), lag.max = 20) ## Checking the acf of residuals
+forecast_train_cmrc <- forecast(arima_model, h=24)
+accuracy_arima <- accuracy(forecast_train_cmrc, test_cmrc)
+
+# Making different arima models
+arima_model1 <- arima(train_cmrc, order = c(2,1,5))
+forecast_train_cmrc <- forecast(arima_model1, h=12)
+accuracy_arima <- accuracy(forecast_train_cmrc, test_cmrc)
+
+# Making Holt Winters Model
+hws_model <- HoltWinters(train_cmrc)
+forecast_train_cmrc <- forecast(hws_model, h=12)
+accuracy_hws <- accuracy(forecast_train_cmrc, test_cmrc)
+
+# Finding autocorelation in time -series data
+pacf(arima_model$residuals, lag.max = 20)
+
+# Checking the randomness of the residuals
+plot.ts(forecast_train_cmrc$residuals)            
+plotForecastErrors(forecast_train_cmrc$residuals)
